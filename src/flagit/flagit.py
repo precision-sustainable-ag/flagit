@@ -25,7 +25,7 @@ import numpy as np
 from scipy.signal import savgol_filter as savgol
 from functools import reduce
 import warnings
-from flagit.settings import Variables
+from .settings import Variables
 
 
 class FormatError(Exception):
@@ -74,9 +74,11 @@ class Interface(object):
 
     """
 
-    def __init__(self, data, sat_point=None):
+    def __init__(self, data, sat_point=None, depth=None, frequency=None):
         self.data = data
         self.sat_point = sat_point
+        self.depth = depth
+        self.frequency = frequency
 
         if not type(self.data) == pd.DataFrame:
             raise FormatError('Please provide pandas.DataFrame as data.')
@@ -89,8 +91,8 @@ class Interface(object):
         self.data['qflag'] = data.soil_moisture.apply(lambda x: set())
 
         if not pd.infer_freq(self.data.index) == 'H':
-            warnings.warn('ISMN automated quality control were developed for hourly data.')
-
+            warnings.warn(
+                'ISMN automated quality control were developed for hourly data.')
 
     def run(self, name=None, sat_point=None) -> pd.DataFrame:
         """
@@ -117,11 +119,14 @@ class Interface(object):
         if not self.sat_point:
             self.sat_point = sat_point
         self.apply_savgol()
+        # flags_dict = {'D11': self.flag_D11, 'G': self.flag_G}
+
+        # flags_dict = {'D11': self.flag_D11,
+        #               'G': self.flag_G}
+
         flags_dict = {'C01': self.flag_C01, 'C02': self.flag_C02, 'C03': self.flag_C03, 'D01': self.flag_D01,
                       'D02': self.flag_D02, 'D03': self.flag_D03, 'D04': self.flag_D04, 'D05': self.flag_D05,
-                      'D06': self.flag_D06, 'D07': self.flag_D07, 'D09': self.flag_D09, 'D10': self.flag_D10,
-                      'G': self.flag_G}
-
+                      'D06': self.flag_D06, 'D07': self.flag_D07, 'D11': self.flag_D11, 'G': self.flag_G}
 
         if name is not None:
             if type(name) == list:
@@ -135,19 +140,19 @@ class Interface(object):
 
         return self.data[keys]
 
-
     def get_flag_description(self) -> None:
         """
         Prints out table with flag codes and a short description.
         """
-        names = ['C01','C02','C03','D01','D02','D03','D04','D05','D06','D07','D08','D09','D10', 'G']
+        names = ['C01', 'C02', 'C03', 'D01', 'D02', 'D03',
+                 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'G']
         description = ['soil moisture < 0 m³ / m³', 'soil moisture > 0.60m³ / m³',
-                        'soil moisture > saturation point(based on HWSD)', 'negative soil temperature( in situ)',
-                        'negative air temperature( in situ)', 'negative soil temperature (GLDAS)',
-                        'rise in soil moisture without precipitation( in situ)',
-                        'rise in soil moisture without precipitation(GLDAS)',
-                        'spikes', 'negative breaks(drops)', 'positive breaks(jumps)',
-                        'constant values following negative break', 'saturated plateaus', 'good']
+                       'soil moisture > saturation point(based on HWSD)', 'negative soil temperature( in situ)',
+                       'negative air temperature( in situ)', 'negative soil temperature (GLDAS)',
+                       'rise in soil moisture without precipitation( in situ)',
+                       'rise in soil moisture without precipitation(GLDAS)',
+                       'spikes', 'negative breaks(drops)', 'positive breaks(jumps)',
+                       'constant values following negative break', 'saturated plateaus', 'good']
 
         titles = ['code', 'description']
         table_create = [titles] + list(zip(names, description))
@@ -158,13 +163,14 @@ class Interface(object):
             if i == 0:
                 print('-' * len(line))
 
-
     def apply_savgol(self) -> None:
         """
         Calculates and adds derivations 1 and 2 using Savitzky-Golay filter
         """
-        self.data['deriv1'] = savgol(self.data.soil_moisture, 3, 2, 1, mode='nearest')
-        self.data['deriv2'] = savgol(self.data.soil_moisture, 3, 2, 2, mode='nearest')
+        self.data['deriv1'] = savgol(
+            self.data.soil_moisture, 3, 2, 1, mode='nearest')
+        self.data['deriv2'] = savgol(
+            self.data.soil_moisture, 3, 2, 2, mode='nearest')
 
     def flag_C01(self):
         """
@@ -226,7 +232,8 @@ class Interface(object):
         Flags when ancillary GLDAS NOAA soil temperature is below threshold
         """
         if 'gldas_soil_temperature' in self.data.columns:
-            index = self.data[self.data['gldas_soil_temperature'] < t.ts_lower].index
+            index = self.data[self.data['gldas_soil_temperature']
+                              < t.ts_lower].index
             if len(index):
                 self.data['qflag'][index].apply(lambda x: x.add('D03'))
 
@@ -236,15 +243,17 @@ class Interface(object):
         Flags when soil moisture increased both during the last hour and during the preceding 24h (increase is larger
         than 2x std-dev during this period), yet ancillary in situ data shows there was no precipitation event greater
         or equal to the minimum precipitation (depending on sensor depth).
-    
+
         At ISMN this flag is only applied to surface soil moisture sensors (<= 10cm sensor depth)
         """
 
         if 'precipitation' in self.data.columns:
             min_precipitation = t.p_min
-            self.data['total_precipitation'] = self.data['precipitation'].rolling(min_periods=1, window=24).sum()
+            self.data['total_precipitation'] = self.data['precipitation'].rolling(
+                min_periods=1, window=24).sum()
 
-            self.data['std_x2'] = self.data['soil_moisture'].rolling(min_periods=1, window=25).std() * 2
+            self.data['std_x2'] = self.data['soil_moisture'].rolling(
+                min_periods=1, window=25).std() * 2
             self.data['rise24h'] = self.data['soil_moisture'].diff(24)
             self.data['rise1h'] = self.data['soil_moisture'].diff(1)
 
@@ -259,7 +268,7 @@ class Interface(object):
         Flags when soil moisture increased both during the last hour and during the preceding 24h (increase is larger
         than 2x std-dev during this period), yet ancillary GLDAS data shows there was no precipitation event greater
         or equal to the minimum precipitation (depending on sensor depth).
-    
+
         At ISMN this flag is only applied to surface soil moisture sensors (<= 10cm sensor depth)
         """
 
@@ -268,7 +277,8 @@ class Interface(object):
 
             self.data['gldas_total_precipitation'] = self.data['gldas_precipitation'].rolling(min_periods=1,
                                                                                               window=24).sum()
-            self.data['gl_std_x2'] = self.data['soil_moisture'].rolling(min_periods=1, window=25).std() * 2
+            self.data['gl_std_x2'] = self.data['soil_moisture'].rolling(
+                min_periods=1, window=25).std() * 2
             self.data['gl_rise24h'] = self.data['soil_moisture'].diff(24)
             self.data['gl_rise1h'] = self.data['soil_moisture'].diff(1)
 
@@ -289,12 +299,12 @@ class Interface(object):
         def rolling_var(sm_array) -> float:
             """
             Calulates variance of soil moisture over a time-range from t-12, t+12 hours without the current value
-    
+
             Parameters
             ----------
             sm_array : numpy.ndarray
                 soil moisture values from t-12 to t+12 hours
-    
+
             Returns
             -------
             float
@@ -309,12 +319,12 @@ class Interface(object):
             Checks if middle element of three consecutive soil moisture measurements is a positive or negative peak or
             alternatively, if middle two values of four consecutive measurements are equal and form a positive or
             negative peak.
-    
+
             Parameters
             ----------
             sm_array : numpy.ndarray
                 soil moisture values from t-1 to t+1 hours
-    
+
             Returns
             -------
             int
@@ -349,18 +359,19 @@ class Interface(object):
             self.data['soil_moisture'].rolling(min_periods=25, window=25, center=True).apply(rolling_var, raw=True)) \
             .div(self.data['soil_moisture'].rolling(window=window, win_type='boxcar', center=True).mean(), axis=0)
 
-        self.data['eq_new1'] = self.data['soil_moisture'].rolling \
-            (min_periods=3, window=4, center=True).apply(peak, raw=True).shift(-1)
+        self.data['eq_new1'] = self.data['soil_moisture'].rolling(
+            min_periods=3, window=4, center=True).apply(peak, raw=True).shift(-1)
 
         self.data['spike_2h'] = self.data['eq_new1'].shift(1) > 1
 
-        self.data['spike'] = (((self.data['eq4'] > 1.15) | (self.data['eq4'] < 0.85)) |
+        self.data['spike'] = (((self.data['eq4'] > 1.20) | (self.data['eq4'] < 0.80)) |
                               (self.data['spike_2h'] > 0)) & \
-                             ((self.data['eq5'] > 0.8) & (self.data['eq5'] < 1.2)) & \
+                             ((self.data['eq5'] > 0.75) & (self.data['eq5'] < 1.25)) & \
                              (self.data['eq6'] < 1) & \
                              (self.data['eq_new1'] > 0)
 
-        index = self.data[(self.data.spike > 0) | ((self.data.spike.shift(1) > 0) & (self.data['spike_2h'] > 0))].index
+        index = self.data[(self.data.spike > 0) | (
+            (self.data.spike.shift(1) > 0) & (self.data['spike_2h'] > 0))].index
 
         self.data['qflag'][index].apply(lambda x: x.add('D06'))
 
@@ -380,16 +391,21 @@ class Interface(object):
         Includes an alternative drop type, which was not included in VJZ paper: drop from above 0.05m³/m³ to zero
         """
 
-        self.data['absolute_change'] = self.data['soil_moisture'] - self.data['soil_moisture'].shift(1)
-        self.data['eq7'] = abs(self.data['absolute_change'].div(self.data['soil_moisture']))
-        self.data['eq8'] = abs(self.data['deriv1'].rolling(min_periods=4, window=25, center=True).mean() * 10)
-        self.data['eq9'] = abs(self.data['deriv2'].shift(1).div(self.data['deriv2']))
+        self.data['absolute_change'] = self.data['soil_moisture'] - \
+            self.data['soil_moisture'].shift(1)
+        self.data['eq7'] = abs(
+            self.data['absolute_change'].div(self.data['soil_moisture']))
+        self.data['eq8'] = abs(self.data['deriv1'].rolling(
+            min_periods=4, window=25, center=True).mean() * 10)
+        self.data['eq9'] = abs(
+            self.data['deriv2'].shift(1).div(self.data['deriv2']))
 
-        self.data['eq9a'] = abs(self.data['deriv2'].div(self.data['deriv2'].shift(-2)))
+        self.data['eq9a'] = abs(self.data['deriv2'].div(
+            self.data['deriv2'].shift(-2)))
 
         # Include drops to zero!
         self.data['eq_new2'] = (abs(self.data['absolute_change']) > 5) & (
-                self.data['soil_moisture'] == 0)
+            self.data['soil_moisture'] == 0)
 
         index = self.data[(self.data['eq7'] > 0.1) &
                           (abs(self.data['absolute_change']) > 1) &
@@ -399,10 +415,13 @@ class Interface(object):
                           (self.data['deriv2'] != 0) &
                           (self.data['eq9a'] > 10)].index
 
-        index_neg = index.intersection(self.data[self.data['deriv1'] < 0].index)
-        index_pos = index.intersection(self.data[self.data['deriv1'] > 0].index)
+        index_neg = index.intersection(
+            self.data[self.data['deriv1'] < 0].index)
+        index_pos = index.intersection(
+            self.data[self.data['deriv1'] > 0].index)
 
-        index_zero = self.data[self.data['eq_new2'] > 0].index  # index where there are drops to zero
+        # index where there are drops to zero
+        index_zero = self.data[self.data['eq_new2'] > 0].index
         index_neg = index_neg.append(index_zero)
 
         if len(index_neg):
@@ -412,13 +431,11 @@ class Interface(object):
         if len(index_pos):
             self.data['qflag'][index_pos].apply(lambda x: x.add('D08'))
 
-
     def flag_D08(self):
         """
         !Included in flag_D07!
         """
         pass
-
 
     def flag_D09(self):
         """
@@ -426,7 +443,6 @@ class Interface(object):
         Flags where a previous soil moisture break (D07) and a period of low relative variance
         (variance/mean < 0.001 m³m⁻³) coincide, soil moisture observations are flagged as "D09" as long as the
         relative variance remains below the treshold. The defined minimum duration of a low plateau is 13h.
-
         See Eq [14] in Dorigo et al. (2013), Global Automated Quality Control of In Situ
         Soil Moisture Data from the International Soil Moisture Network,VZJ.
         """
@@ -441,25 +457,28 @@ class Interface(object):
 
         # When sm == 0 for >12h => the mean equals 0 => relative variance is therefore calculated as nan
         # To catch periods of sm=0 after a sm-drop to zero (D07 criteria 4): reset these nan-values to 0
-        self.data['hit'] = self.data[self.data['rel_var'].isna() & (self.data['soil_moisture'] == 0)] = 0.0
+        self.data['hit'] = self.data[self.data['rel_var'].isna() & (
+            self.data['soil_moisture'] == 0)] = 0.0
 
         # find where there is a drop in soil moisture (flag D07) and a period of low relative variance
-        self.data['event'] = ((self.data['qflag'].astype(str)).str.contains('D07') & (self.data['rel_var'] < 0.001))
+        self.data['event'] = ((self.data['qflag'].astype(str)).str.contains(
+            'D07') & (self.data['rel_var'] < 0.001))
         self.data['event'].replace(np.nan, 0, inplace=True)
         self.data['event'] = self.data['event'].astype(int)
 
         # assign -1 where the "event" could end and create a pleateau_mask
-        self.data.loc[(self.data[['rel_var']].max(1).diff() >= 0.001) & (self.data['event'] == 0), 'event'] = -1
+        self.data.loc[(self.data[['rel_var']].max(1).diff() >= 0.001) & (
+            self.data['event'] == 0), 'event'] = -1
 
         def plateau_mask(array_sequence) -> list:
             """
             Generates a mask where Plateau criteria are fulfilled.
-    
+
             Parameters
             ----------
             array_sequence:  numpy ndarray
                 sequence of 1 (Plateau criteria fulfilled), -1(Plateau criteria no longer fulfilled), 0
-    
+
             Returns
             -------
             list
@@ -470,17 +489,16 @@ class Interface(object):
         self.data['plateau'] = plateau_mask(self.data['event'].values)
 
         # Extend each Plateau to at least 13h time (minimum period)
-        self.data['end'] = self.data['plateau'].rolling(min_periods=13, window=13).max()
+        self.data['end'] = self.data['plateau'].rolling(
+            min_periods=13, window=13).max()
 
         index = self.data[self.data['end'] > 0.0].index
 
         if len(index):
             self.data['qflag'][index].apply(lambda x: x.add('D09'))
 
-        if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
-            self.data = self.data.resample('H').asfreq()
-
-
+        # if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
+        #     self.data = self.data.resample('H').asfreq()
 
     def flag_D10(self):
         """
@@ -490,8 +508,6 @@ class Interface(object):
         +/- 12h and a drop in the first derivative lower or equal to 0 at the end of the plv +/- 12h a mean of the
         soil moisture values between the rise and drop (or if they occur beyond plv scope, beginning and/or respective
         end of plv) of above 0.95% of the previous highest soil moisture value ever detected (highest_sm).
-
-
         See Eq [10,11,12,13] in Dorigo et al. (2013), Global Automated Quality Control of In Situ
         Soil Moisture Data from the International Soil Moisture Network,VZJ.
         """
@@ -500,12 +516,12 @@ class Interface(object):
             """
             Possible plateaus are numbered consecutively.
             (e.g.: array([1,0,1,1,0,0,1,1)] -> [1,0,2,2,0,0,3,3])
-    
+
             Parameters
             ----------
             array : ndarray
                 1-dimensional array containing mask where variance of soil moisture observations are below 0.05 for 12h
-    
+
             Returns
             -------
             seq : list
@@ -521,18 +537,22 @@ class Interface(object):
 
         # Mean of plateau must be higher than 95% of this threshold;
         # For ISMN quality flags the previous 2 years of data are taken into account.
-        highest_sm = self.data['soil_moisture'][self.data['soil_moisture'] < 60].max()
+        highest_sm = self.data['soil_moisture'][self.data['soil_moisture'] < 60].max(
+        )
 
         # Throw out datagaps - plateau can bridge gap
         self.data.dropna(subset=['soil_moisture'], inplace=True)
 
         # Look for periods of low variance (VAR) and assign rising numbers
-        self.data.loc[:, 'VAR'] = self.data['soil_moisture'].rolling(min_periods=12, window=12).var().shift(-11) <= 0.05
+        self.data.loc[:, 'VAR'] = self.data['soil_moisture'].rolling(
+            min_periods=12, window=12).var().shift(-11) <= 0.05
         self.data['VAR_grouped'] = renumber_plateaus(self.data.VAR.values)
 
         # Look for maximum rise and minimum drop within 25 hours for each period of low varicance
-        self.data.loc[:, 'maximum'] = self.data['deriv1'].rolling(window=25, min_periods=1).max().shift(-12)
-        self.data.loc[:, 'minimum'] = self.data['deriv1'].rolling(window=25, min_periods=1).min().shift(-24)
+        self.data.loc[:, 'maximum'] = self.data['deriv1'].rolling(
+            window=25, min_periods=1).max().shift(-12)
+        self.data.loc[:, 'minimum'] = self.data['deriv1'].rolling(
+            window=25, min_periods=1).min().shift(-24)
 
         rise = round(self.data.groupby('VAR_grouped')['maximum'].first(), 3)
         drop = round(self.data.groupby('VAR_grouped')['minimum'].last(), 3)
@@ -545,15 +565,19 @@ class Interface(object):
         index = []
         for idx, row in possible_plateaus.iterrows():
             # Look for possible plateaus including both a soil moisture rise and drop
-            self.data['VAR_rise_drop'] = self.data.VAR_grouped[(self.data.VAR_grouped == idx)]
-            VAR_period = self.data['VAR_rise_drop'].rolling(window=12, min_periods=1).max() == idx
+            self.data['VAR_rise_drop'] = self.data.VAR_grouped[(
+                self.data.VAR_grouped == idx)]
+            VAR_period = self.data['VAR_rise_drop'].rolling(
+                window=12, min_periods=1).max() == idx
 
             # max lies inside of VAR period
             if not self.data.index[VAR_period & (self.data['deriv1'] == row.maximum)].empty:
-                max_search_period_start = self.data.index[VAR_period & (self.data['deriv1'] == row.maximum)][0]
+                max_search_period_start = self.data.index[VAR_period & (
+                    self.data['deriv1'] == row.maximum)][0]
                 # min lies within VAR period
                 if not self.data.index[VAR_period & (self.data['deriv1'] == row.minimum)].empty:
-                    min_search_period_end = self.data.index[VAR_period & (self.data['deriv1'] == row.minimum)][0]
+                    min_search_period_end = self.data.index[VAR_period & (
+                        self.data['deriv1'] == row.minimum)][0]
                 # min lies outside VAR
                 else:
                     min_search_period_end = VAR_period[::-1].idxmax()
@@ -563,7 +587,8 @@ class Interface(object):
                 max_search_period_start = VAR_period.idxmax()
                 # mimimum within VAR period
                 if not self.data.index[VAR_period & (self.data['deriv1'] == row.minimum)].empty:
-                    min_search_period_end = self.data.index[VAR_period & (self.data['deriv1'] == row.minimum)][0]
+                    min_search_period_end = self.data.index[VAR_period & (
+                        self.data['deriv1'] == row.minimum)][0]
                 # minimum within VAR period
                 else:
                     min_search_period_end = VAR_period[::-1].idxmax()
@@ -574,9 +599,115 @@ class Interface(object):
 
         self.data['qflag'][index].apply(lambda x: x.add('D10'))
 
-        if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
-            self.data = self.data.resample('H').asfreq()
+        # if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
+        #     self.data = self.data.resample('H').asfreq()
 
+    def flag_D11(self):
+        """
+        Invariant high soil moisture values:
+        Flags where the variance of soil moisture values within 12h is below 0.05 ->  period of low variance (plv)
+        with a min_len of 12h. The plv requires a rise in the first derivative of at least 0.25 in beginning of the plv
+        +/- 12h and a drop in the first derivative lower or equal to 0 at the end of the plv +/- 12h a mean of the
+        soil moisture values between the rise and drop (or if they occur beyond plv scope, beginning and/or respective
+        end of plv) of above 0.95% of the previous highest soil moisture value ever detected (highest_sm).
+        See Eq [10,11,12,13] in Dorigo et al. (2013), Global Automated Quality Control of In Situ
+        Soil Moisture Data from the International Soil Moisture Network,VZJ.
+        """
+
+        hours_12 = 24 * 7 * int(1 / self.frequency)
+        hours_24 = 2 * hours_12
+
+        def renumber_plateaus(array) -> list:
+            """
+            Possible plateaus are numbered consecutively.
+            (e.g.: array([1,0,1,1,0,0,1,1)] -> [1,0,2,2,0,0,3,3])
+
+            Parameters
+            ----------
+            array : ndarray
+                1-dimensional array containing mask where variance of soil moisture observations are below 0.05 for 12h
+
+            Returns
+            -------
+            seq : list
+                Sequence containing rising group numbers (potential plateaus).
+            """
+            group = 1
+            seq = []
+            for a, b in zip(array, array[1:]):
+                seq.append((lambda x: group if x > 0 else 0)(a))
+                if a == 1 and b == 0:
+                    group += 1
+            return seq + [group * array[-1]]
+
+        # Mean of plateau must be higher than 95% of this threshold;
+        # For ISMN quality flags the previous 2 years of data are taken into account.
+        highest_sm = self.data['soil_moisture'][self.data['soil_moisture'] < 60].max(
+        )
+
+        # Throw out datagaps - plateau can bridge gap
+        self.data.dropna(subset=['soil_moisture'], inplace=True)
+
+        # Look for periods of low variance (VAR) and assign rising numbers
+        self.data.loc[:, 'VAR'] = self.data['soil_moisture'].rolling(
+            min_periods=hours_12, window=hours_12).var().shift(-(hours_12 + 1)) <= 0.05 / 50
+        self.data['VAR_grouped'] = renumber_plateaus(self.data.VAR.values)
+
+        print(self.data)
+
+        # Look for maximum rise and minimum drop within 25 hours for each period of low varicance
+        self.data.loc[:, 'maximum'] = self.data['deriv1'].rolling(
+            window=hours_24 + 1, min_periods=1).max().shift(-hours_12)
+        self.data.loc[:, 'minimum'] = self.data['deriv1'].rolling(
+            window=hours_24 + 1, min_periods=1).min().shift(-hours_24)
+
+        rise = round(self.data.groupby('VAR_grouped')['maximum'].first(), 3)
+        drop = round(self.data.groupby('VAR_grouped')['minimum'].last(), 3)
+        rise = rise[rise >= 0.25]
+        drop = drop[drop < 0]
+
+        possible_plateaus = pd.concat([rise, drop], axis=1)[1:]
+        possible_plateaus.dropna(inplace=True)
+
+        index = []
+        for idx, row in possible_plateaus.iterrows():
+            # Look for possible plateaus including both a soil moisture rise and drop
+            self.data['VAR_rise_drop'] = self.data.VAR_grouped[(
+                self.data.VAR_grouped == idx)]
+            VAR_period = self.data['VAR_rise_drop'].rolling(
+                window=hours_12, min_periods=1).max() == idx
+
+            # max lies inside of VAR period
+            if not self.data.index[VAR_period & (self.data['deriv1'] == row.maximum)].empty:
+                max_search_period_start = self.data.index[VAR_period & (
+                    self.data['deriv1'] == row.maximum)][0]
+                # min lies within VAR period
+                if not self.data.index[VAR_period & (self.data['deriv1'] == row.minimum)].empty:
+                    min_search_period_end = self.data.index[VAR_period & (
+                        self.data['deriv1'] == row.minimum)][0]
+                # min lies outside VAR
+                else:
+                    min_search_period_end = VAR_period[::-1].idxmax()
+
+            # max lies outside of VAR period
+            else:
+                max_search_period_start = VAR_period.idxmax()
+                # mimimum within VAR period
+                if not self.data.index[VAR_period & (self.data['deriv1'] == row.minimum)].empty:
+                    min_search_period_end = self.data.index[VAR_period & (
+                        self.data['deriv1'] == row.minimum)][0]
+                # minimum within VAR period
+                else:
+                    min_search_period_end = VAR_period[::-1].idxmax()
+
+            Plateau = self.data['soil_moisture'].loc[max_search_period_start:min_search_period_end]
+            # if Plateau.mean() > (highest_sm * 0.95):
+            index.extend(Plateau.index)
+
+        self.data['qflag'][index].apply(lambda x: x.add('D11'))
+
+        # if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
+        #     self.data = self.data.resample('H').asfreq()
 
     def flag_G(self):
         """
