@@ -139,6 +139,7 @@ class Interface(object):
                 flags_dict[key]()
 
         return self.data[keys]
+        # return self.data
 
     def get_flag_description(self) -> None:
         """
@@ -247,13 +248,15 @@ class Interface(object):
         At ISMN this flag is only applied to surface soil moisture sensors (<= 10cm sensor depth)
         """
 
+        hours_24 = int(1 / self.frequency) * 48
+
         if 'precipitation' in self.data.columns:
             min_precipitation = t.p_min
             self.data['total_precipitation'] = self.data['precipitation'].rolling(
-                min_periods=1, window=24).sum()
+                min_periods=1, window=hours_24).sum()
 
             self.data['std_x2'] = self.data['soil_moisture'].rolling(
-                min_periods=1, window=25).std() * 2
+                min_periods=1, window=hours_24 + 1).std() * 3
             self.data['rise24h'] = self.data['soil_moisture'].diff(24)
             self.data['rise1h'] = self.data['soil_moisture'].diff(1)
 
@@ -653,7 +656,7 @@ class Interface(object):
             min_periods=hours_12, window=hours_12).var().shift(-(hours_12 + 1)) <= 0.05 / 50
         self.data['VAR_grouped'] = renumber_plateaus(self.data.VAR.values)
 
-        print(self.data)
+        # print(self.data)
 
         # Look for maximum rise and minimum drop within 25 hours for each period of low varicance
         self.data.loc[:, 'maximum'] = self.data['deriv1'].rolling(
