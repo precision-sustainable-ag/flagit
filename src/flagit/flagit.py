@@ -88,11 +88,14 @@ class Interface(object):
                               '"soil_temperature", "air_temperature", "precipitation", "gldas_soil_temperature", '
                               '"gldas_precipitation"')
 
+        if self.data.empty:
+            raise FormatError('empty df')
+
         self.data['qflag'] = data.soil_moisture.apply(lambda x: set())
 
-        if not pd.infer_freq(self.data.index) == 'H':
-            warnings.warn(
-                'ISMN automated quality control were developed for hourly data.')
+        # if not pd.infer_freq(self.data.index) == 'H':
+        #     warnings.warn(
+        #         'ISMN automated quality control were developed for hourly data.')
 
     def run(self, name=None, sat_point=None) -> pd.DataFrame:
         """
