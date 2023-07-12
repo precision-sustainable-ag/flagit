@@ -251,15 +251,15 @@ class Interface(object):
         At ISMN this flag is only applied to surface soil moisture sensors (<= 10cm sensor depth)
         """
 
-        hours_24 = int(1 / self.frequency) * 48
+        hours_48 = int(1 / self.frequency) * 48
 
         if 'precipitation' in self.data.columns:
             min_precipitation = t.p_min
             self.data['total_precipitation'] = self.data['precipitation'].rolling(
-                min_periods=1, window=hours_24).sum()
+                min_periods=1, window=hours_48).sum()
 
             self.data['std_x2'] = self.data['soil_moisture'].rolling(
-                min_periods=1, window=hours_24 + 1).std() * 3
+                min_periods=1, window=hours_48 + 1).std() * 3
             self.data['rise24h'] = self.data['soil_moisture'].diff(24)
             self.data['rise1h'] = self.data['soil_moisture'].diff(1)
 
