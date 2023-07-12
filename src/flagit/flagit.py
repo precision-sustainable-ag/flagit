@@ -91,11 +91,8 @@ class Interface(object):
         if self.data.empty:
             raise FormatError('empty df')
 
-<<<<<<< HEAD
         self.data['qflag'] = data.soil_moisture.apply(lambda x: set())
 
-=======
->>>>>>> main
         # if not pd.infer_freq(self.data.index) == 'H':
         #     warnings.warn(
         #         'ISMN automated quality control were developed for hourly data.')
@@ -132,12 +129,7 @@ class Interface(object):
 
         flags_dict = {'C01': self.flag_C01, 'C02': self.flag_C02, 'C03': self.flag_C03, 'D01': self.flag_D01,
                       'D02': self.flag_D02, 'D03': self.flag_D03, 'D04': self.flag_D04, 'D05': self.flag_D05,
-<<<<<<< HEAD
                       'D06': self.flag_D06, 'D07': self.flag_D07, 'D11': self.flag_D11, 'G': self.flag_G}
-=======
-                      'D06': self.flag_D06, 'D07': self.flag_D07, 'D09': self.flag_D09, 'D10': self.flag_D10,
-                      'G': self.flag_G}
->>>>>>> main
 
         if name is not None:
             if type(name) == list:
@@ -150,21 +142,14 @@ class Interface(object):
                 flags_dict[key]()
 
         return self.data[keys]
-<<<<<<< HEAD
         # return self.data
-=======
->>>>>>> main
 
     def get_flag_description(self) -> None:
         """
         Prints out table with flag codes and a short description.
         """
         names = ['C01', 'C02', 'C03', 'D01', 'D02', 'D03',
-<<<<<<< HEAD
                  'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'G']
-=======
-                 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'G']
->>>>>>> main
         description = ['soil moisture < 0 m³ / m³', 'soil moisture > 0.60m³ / m³',
                        'soil moisture > saturation point(based on HWSD)', 'negative soil temperature( in situ)',
                        'negative air temperature( in situ)', 'negative soil temperature (GLDAS)',
@@ -271,17 +256,10 @@ class Interface(object):
         if 'precipitation' in self.data.columns:
             min_precipitation = t.p_min
             self.data['total_precipitation'] = self.data['precipitation'].rolling(
-<<<<<<< HEAD
                 min_periods=1, window=hours_48).sum()
 
             self.data['std_x2'] = self.data['soil_moisture'].rolling(
                 min_periods=1, window=hours_48 + 1).std() * 3
-=======
-                min_periods=1, window=24).sum()
-
-            self.data['std_x2'] = self.data['soil_moisture'].rolling(
-                min_periods=1, window=25).std() * 2
->>>>>>> main
             self.data['rise24h'] = self.data['soil_moisture'].diff(24)
             self.data['rise1h'] = self.data['soil_moisture'].diff(1)
 
@@ -525,13 +503,8 @@ class Interface(object):
         if len(index):
             self.data['qflag'][index].apply(lambda x: x.add('D09'))
 
-<<<<<<< HEAD
         # if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
         #     self.data = self.data.resample('H').asfreq()
-=======
-        if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
-            self.data = self.data.resample('H').asfreq()
->>>>>>> main
 
     def flag_D10(self):
         """
@@ -739,12 +712,9 @@ class Interface(object):
 
         self.data['qflag'][index].apply(lambda x: x.add('D11'))
 
-<<<<<<< HEAD
         # if type(self.data.index) == pd.core.indexes.datetimes.DatetimeIndex:
         #     self.data = self.data.resample('H').asfreq()
 
-=======
->>>>>>> main
     def flag_G(self):
         """
        Applies flag 'G' for 'good' to all unflagged observations
